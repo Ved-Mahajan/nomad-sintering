@@ -15,7 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+from nomad.units import ureg
+import pandas as pd
 from typing import (
     TYPE_CHECKING,
 )
@@ -101,17 +102,35 @@ class Sintering(Process, EntryData, ArchiveSection):
         section_def=TemperatureRamp,
         repeats=True,
     )
+    data_file = Quantity(
+    type=str,
+    description='The recipe file for the sintering process.',
+    a_eln={
+        "component": "FileEditQuantity",
+    },
+)
 
-    def normalize(self, archive: 'EntryArchive', logger: 'BoundLogger') -> None:
+    def normalize(self, archive, logger: 'BoundLogger') ->    None:
         '''
-        The normalizer for the `Sintering` class.
+        The normalizer for the `Sintering` class.s
 
         Args:
             archive (EntryArchive): The archive containing the section that is being
             normalized.
             logger (BoundLogger): A structlog logger.
         '''
-        super().normalize(archive, logger)
-
+        super(Sintering, self).normalize(archive, logger)
+        if self.data_file:
+          with archive.m_context.raw_file(self.data_file) as file:
+            df = pd.read_csv(file)
+          steps = []
+          for i, row in df.iterrows():
+            step = TemperatureRamp()
+            step.name = row['step name']
+            step.duration = ureg.Quantity(float(row['duration [min]']), 'minutes')
+            step.initial_temperature = ureg.Quantity(row['initial temperature [C]'], 'celsius')
+            step.final_temperature = ureg.Quantity(row['final temperature [C]'], 'celsius')
+            steps.append(step)
+        self.steps = steps
 
 m_package.__init_metainfo__()
